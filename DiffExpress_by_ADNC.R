@@ -18,9 +18,13 @@ library(Seurat)
 #Upload celltype-specific Seurat object with metadata, both sexes included (astrocytes)
 p1 <- synapser::synGet('syn31618644')
 AllenAD <- readRDS(p1$path)
+#look at metadata
 head(x=AllenAD[[]])
 table(AllenAD$sex)
+#how many donors?
 length(unique(AllenAD$`Donor ID`))
+#how many genes/cells?
+dim(AllenAD)
 
 #extract the counts matrix and save the metadata file for later
 counts <- GetAssayData(object = AllenAD, slot = "counts")
@@ -60,14 +64,16 @@ Make.Gene.Symb <- function(GeneENSG){
   
 }
 
+#extract ensembl gene names from counts matrix
 ensembl <- row.names(counts)
 ensembl <- as.data.frame(ensembl)
+#run function to get short gene names
 ensembl$gene_short_name <- Make.Gene.Symb(ensembl$ensembl)
 gene_short_name <- ensembl$gene_short_name
 #for ensembl genes that did not receive a gene short name from biomart, replace with the ensembl ID
-ensembl$gene_short_name2 <- ifelse(ensembl$gene_short_name=="", ensembl$ensembl, ensembl$gene_short_name)
+ensembl$gene_short_name <- ifelse(ensembl$gene_short_name=="", ensembl$ensembl, ensembl$gene_short_name)
 
-rownames(counts) <- ensembl$gene_short_name2
+rownames(counts) <- ensembl$gene_short_name
 
 #delete genes that did not get translated by biomaRt (virtually all are RNA genes, pseudogenes, and have low expression)
 counts2 <- counts[-which(grepl("^ENSG",counts@Dimnames[[1]])),]
@@ -75,15 +81,16 @@ counts3 <- counts2[-which(grepl("^[0-9]",counts2@Dimnames[[1]])),]
 
 dim(counts3)
 
-#recreate seurat object, which will fix column headers with spaces in the metadata and make rownames unique
+#recreate seurat object, which will fix column headers with spaces in the metadata and make rownames unique (seurat will list changed headers in red)
 seaAD <- CreateSeuratObject(counts = counts3, meta.data = seaMeta, min.cells = 3)
 dim(seaAD)
-#calculate library size factors for DE analysis:
+#calculate library size factors for DE analysis and add them to the seurat object:
 libsizes <- colSums(counts3)
 seaAD <- AddMetaData(seaAD, metadata=libsizes, col.name='libsizes')
 seaAD$size.factor <- seaAD$libsizes/mean(seaAD$libsizes)
 
 
+table(seaAD$ADNC)
 #remove reference donors
 seaAD <- subset(seaAD, ADNC!='Reference')
 #allen <- subset(allen, ADNC!='Not AD')
@@ -96,18 +103,19 @@ seaAD$ADNC <- as.factor(seaAD$ADNC)
 #test2: Not AD vs Low/Int AD
 #test3: Low/Int AD vs High AD
 
+#create separate objects for each comparison
 test1 <- seaAD
 test1$diag <- ifelse(test1$ADNC=='Not AD', 0, 1)
-test2 <- subset(allen, ADNC!='High')
+test2 <- subset(seaAD, ADNC!='High')
 test2$diag <- ifelse(test2$ADNC=='Not AD', 0, 1)
-test3 <- subset(allen, ADNC!='Not AD')
+test3 <- subset(seaAD, ADNC!='Not AD')
 test3$diag <- ifelse(test3$ADNC!='High', 0, 1)
 
-#look at numbers of cells per group
+#look at numbers of cells per group, double check that 'diag' is appropriately labeled
 table(test1$diag, test1$ADNC)
 table(test2$diag, test2$ADNC)
 table(test3$diag, test3$ADNC)
-table(allen$ADNC)
+table(seaAD$ADNC)
 
 
 #order the metadata by donor ID, then reorder the counts matrix to match:
@@ -116,7 +124,7 @@ mat <- GetAssayData(object=test1, slot="counts")
 meta <- meta[order(meta$Donor.ID),]
 col.order <- meta$TAG
 mat <- mat[,col.order]
-#set design matrix (adjust for sex) and run nebula
+#set design matrix (adjust for sex) and run nebula (this takes a while, be patient)
 modmat = model.matrix(~diag+sex, data=meta)
 model1 <- nebula(mat, meta$Donor.ID, pred=modmat, offset=meta$size.factor)
 #get dataframe of results, perform FDR to adjust for multiple comparisons, label the comparison, and save
@@ -170,6 +178,6 @@ write.csv(DEgenes, file='~/SEA_AD_snRNAseq_lineages/data_objects/AllenAstro_DE_g
 file <- synapser::File(path='~/SEA_AD_snRNAseq_lineages/data_objects/SEA_AD_CELLTYPEHERE_DEgenes.csv', parentId='FILL IN CELLTYPE FOLDER ID HERE')
 file <- synapser::synStore(file)
 
-#how many genes were signficant?
+#how many genes were significant?
 pvalue05 <- DEgenes[(DEgenes$p_diag<0.05),]
 length(unique(pvalue05$gene))
