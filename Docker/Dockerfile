@@ -29,5 +29,5 @@ RUN R -e "install.packages('remotes')" \
 && R -e "devtools::install_github('cole-trapnell-lab/leidenbase')"\
 
 
-run mkdir -p /home/lheath/celltype_mapping \ 
-&& git clone https://github.com/lauraheath/scRNAseq-subtype-mapping.git /home/lheath/celltype_mapping
+run mkdir -p /home/lheath/seaADlineage \ 
+&& git clone https://github.com/lauraheath/SEA_AD_snRNAseq_lineages.git /home/lheath/seaADlineage
