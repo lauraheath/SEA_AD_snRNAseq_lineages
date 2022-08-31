@@ -1,3 +1,12 @@
+install.packages("devtools")
+library(devtools)
+install_github("lhe17/nebula")
+install.packages('Seurat')
+
+if (!require("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+BiocManager::install("biomaRt")
+
 library(nebula)
 library(biomaRt)
 library(Seurat)
@@ -15,14 +24,9 @@ length(unique(AllenAD$`Donor ID`))
 
 #extract the counts matrix and save the metadata file for later
 counts <- GetAssayData(object = AllenAD, slot = "counts")
-metadata <- AllenAD@meta.data
+seaMeta <- AllenAD@meta.data
 #create a column containing barcodes
-metadata$TAG <- rownames(metadata)
-
-#reorder metadata rows (same as 'TAG' column variable) to match columns of counts matrix:
-# colnames_counts <- as.data.frame(colnames(counts))
-# names(colnames_counts)[names(colnames_counts) == "colnames(counts)"] <- "columnnames"
-# metadata <- metadata[order(match(metadata$TAG, colnames_counts$columnnames)),]
+seaMeta$TAG <- rownames(seaMeta)
 
 
 #replace ensembl identifiers with gene short names with following functions
@@ -72,11 +76,11 @@ counts3 <- counts2[-which(grepl("^[0-9]",counts2@Dimnames[[1]])),]
 dim(counts3)
 
 #recreate seurat object, which will fix column headers with spaces in the metadata and make rownames unique
-seaAD <- CreateSeuratObject(counts = counts3, meta.data = metadata, min.cells = 3)
+seaAD <- CreateSeuratObject(counts = counts3, meta.data = seaMeta, min.cells = 3)
 dim(seaAD)
 #calculate library size factors for DE analysis:
 libsizes <- colSums(counts3)
-seaAD <- AddMetaData(seaAD metadata=libsizes, col.name='libsizes')
+seaAD <- AddMetaData(seaAD, metadata=libsizes, col.name='libsizes')
 seaAD$size.factor <- seaAD$libsizes/mean(seaAD$libsizes)
 
 
@@ -160,10 +164,10 @@ DEgenes <- rbind(model1sum, model2sum)
 DEgenes <- rbind(DEgenes, model3sum)
 
 
-write.csv(DEgenes, file='~/scRNAseq-subtype-mapping/data_objects/AllenAstro_DE_genesALL.csv', row.names=FALSE)
+write.csv(DEgenes, file='~/SEA_AD_snRNAseq_lineages/data_objects/AllenAstro_DE_genesALL.csv', row.names=FALSE)
 
 #save in celltype-specific folder in project SEA_AD_lineage_analysis (syn35549553)
-file <- synapser::File(path='~/scRNAseq-subtype-mapping/data_objects/AllenAstro_DE_genesALL.csv', parentId='')
+file <- synapser::File(path='~/SEA_AD_snRNAseq_lineages/data_objects/SEA_AD_CELLTYPEHERE_DEgenes.csv', parentId='FILL IN CELLTYPE FOLDER ID HERE')
 file <- synapser::synStore(file)
 
 #how many genes were signficant?
